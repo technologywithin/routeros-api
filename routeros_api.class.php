@@ -15,6 +15,8 @@
  *
  ******************************/
 
+class RouterosError extends \Exception {};
+
 class RouterosAPI
 {
     var $debug     = false; //  Show debug information
@@ -28,6 +30,7 @@ class RouterosAPI
     var $socket;            //  Variable for storing socket resource
     var $error_no;          //  Variable for storing connection error number, if any
     var $error_str;         //  Variable for storing connection error text, if any
+    var $exceptions = false;//  Throw exceptions when !trap returned from the API
 
     /* Check, can be var used in foreach  */
     public function isIterable($var)
@@ -337,6 +340,13 @@ class RouterosAPI
 
         if ($parse) {
             $RESPONSE = $this->parseResponse($RESPONSE);
+            if ($this->exceptions && isset($RESPONSE['!trap'])) {
+                throw new RouterosError($RESPONSE['!trap'][0]['message']);
+            }
+        } else {
+            if ($this->exceptions && isset($RESPONSE[0]) && $RESPONSE[0] == '!trap') {
+                throw new RouterosError(str_replace('=message=', '', $RESPONSE[1]));
+            }
         }
 
         return $RESPONSE;
@@ -410,7 +420,12 @@ class RouterosAPI
             }
         }
 
-        return $this->read();
+        try {
+            return $this->read();
+        } catch (RouterosError $e) {
+            throw new RouterosError($e->getMessage() . " during '$com'");
+        }
+
     }
 
     /**
